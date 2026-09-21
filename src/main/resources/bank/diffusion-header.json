@@ -1,0 +1,17 @@
+{
+  "companyId": 2295,
+  "password": "",
+  "documentNumber": "",
+  "documentType": "Q",
+  "documentExtension": "LP",
+  "documentComplement": "",
+  "amount": 0,
+  "currency": "BOL",
+  "fundSource": "Ambiente sanbox",
+  "fundDestination": "AMbiente de pruebas",
+  "sourceAccount": "",
+  "sourceCurrency": "BOL",
+  "description": "Descripcion prueba",
+  "sendVouchers": "prueba@gmail.com",
+  "cismartApprovers": []
+}

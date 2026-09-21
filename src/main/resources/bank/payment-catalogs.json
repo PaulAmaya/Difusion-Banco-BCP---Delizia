@@ -1,0 +1,71 @@
+{
+  "banks": [
+    {"code": "1001", "name": "Banco Nacional de Bolivia - BNB"},
+    {"code": "1003", "name": "Banco Mercantil Santa Cruz"},
+    {"code": "1004", "name": "Banco Central de Bolivia"},
+    {"code": "1005", "name": "Banco de Credito de Bolivia - BCP"},
+    {"code": "1007", "name": "Banco de la Nacion Argentina"},
+    {"code": "1009", "name": "Banco BISA"},
+    {"code": "1014", "name": "Banco Union"},
+    {"code": "1016", "name": "Banco Economico"},
+    {"code": "1017", "name": "Banco Solidario - BancoSol"},
+    {"code": "1018", "name": "Banco Ganadero"},
+    {"code": "1033", "name": "Banco FIE"},
+    {"code": "1034", "name": "Banco Fortaleza"},
+    {"code": "1036", "name": "Banco Prodem"},
+    {"code": "74002", "name": "Banco PYME Ecofuturo"},
+    {"code": "74003", "name": "Banco PYME de la Comunidad"}
+  ],
+  "documentTypes": [
+    {"code": "O", "name": "Otro"},
+    {"code": "P", "name": "Pasaporte"},
+    {"code": "Q", "name": "CI"},
+    {"code": "R", "name": "RUC"},
+    {"code": "T", "name": "NIT"},
+    {"code": "U", "name": "ID fiscal"},
+    {"code": "W", "name": "Codigo generico banco"}
+  ],
+  "documentExtensions": [
+    {"code": "BE", "name": "Beni"},
+    {"code": "CB", "name": "Cochabamba"},
+    {"code": "CH", "name": "Chuquisaca"},
+    {"code": "LP", "name": "La Paz"},
+    {"code": "OR", "name": "Oruro"},
+    {"code": "PA", "name": "Pando"},
+    {"code": "PE", "name": "Persona extranjera"},
+    {"code": "PO", "name": "Potosi"},
+    {"code": "SC", "name": "Santa Cruz"},
+    {"code": "TJ", "name": "Tarija"},
+    {"code": "SN", "name": "Sin extension"},
+    {"code": "XX", "name": "Sin extension"},
+    {"code": "NN", "name": "Desconocido"}
+  ],
+  "regions": [
+    {"code": "CH", "name": "Chuquisaca", "cityCode": 101},
+    {"code": "LP", "name": "La Paz", "cityCode": 201},
+    {"code": "CB", "name": "Cochabamba", "cityCode": 301},
+    {"code": "OR", "name": "Oruro", "cityCode": 401},
+    {"code": "PO", "name": "Potosi", "cityCode": 501},
+    {"code": "TJ", "name": "Tarija", "cityCode": 601},
+    {"code": "SC", "name": "Santa Cruz", "cityCode": 701},
+    {"code": "BE", "name": "Beni", "cityCode": 801},
+    {"code": "PA", "name": "Pando", "cityCode": 901}
+  ],
+  "sapCities": [
+    {"value": "1", "name": "Santa Cruz", "region": "SC"},
+    {"value": "2", "name": "Pando", "region": "PA"},
+    {"value": "3", "name": "Beni", "region": "BE"},
+    {"value": "4", "name": "La Paz", "region": "LP"},
+    {"value": "5", "name": "Oruro", "region": "OR"},
+    {"value": "6", "name": "Cochabamba", "region": "CB"},
+    {"value": "7", "name": "Tarija", "region": "TJ"},
+    {"value": "8", "name": "Sucre", "region": "CH"},
+    {"value": "9", "name": "Potosi", "region": "PO"},
+    {"value": "10", "name": "El Alto", "region": "LP"}
+  ],
+  "notApplicableCityCode": 999,
+  "sourceAccounts": [
+    {"sapAccount": "11010501", "name": "BCP LP", "region": "LP", "bankAccount": "2015009988370"},
+    {"sapAccount": "11010570", "name": "BCP SC", "region": "SC", "bankAccount": "20150838488388"}
+  ]
+}
