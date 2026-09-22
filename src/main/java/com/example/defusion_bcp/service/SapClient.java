@@ -26,14 +26,21 @@ import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.math.BigDecimal;
 import java.security.GeneralSecurityException;
+import java.security.KeyStore;
 import java.security.SecureRandom;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -577,12 +584,52 @@ public class SapClient {
     }
 
     private static SimpleClientHttpRequestFactory createRequestFactory(SapProperties properties) {
-        SimpleClientHttpRequestFactory factory = properties.isTlsRejectUnauthorized()
-            ? new SimpleClientHttpRequestFactory()
-            : new InsecureTlsRequestFactory();
+        String expectedHostname = properties.getTlsExpectedHostname() == null
+            ? ""
+            : properties.getTlsExpectedHostname().trim();
+        SSLContext trustContext = createSapTrustContext(properties.getTlsTrustCertificatePath());
+        SimpleClientHttpRequestFactory factory;
+        if (!properties.isTlsRejectUnauthorized()) {
+            factory = new InsecureTlsRequestFactory();
+        } else if (!expectedHostname.isBlank() || trustContext != null) {
+            factory = new VerifiedTlsRequestFactory(expectedHostname, trustContext);
+        } else {
+            factory = new SimpleClientHttpRequestFactory();
+        }
         factory.setConnectTimeout(properties.getConnectTimeout());
         factory.setReadTimeout(properties.getReadTimeout());
         return factory;
+    }
+
+    private static SSLContext createSapTrustContext(String certificatePath) {
+        if (certificatePath == null || certificatePath.isBlank()) {
+            return null;
+        }
+        Path path = Path.of(certificatePath.trim());
+        if (!Files.isRegularFile(path) || !Files.isReadable(path)) {
+            throw new IllegalStateException("El certificado de confianza SAP no existe o no es legible");
+        }
+        try (InputStream input = Files.newInputStream(path)) {
+            var certificates = CertificateFactory.getInstance("X.509").generateCertificates(input);
+            if (certificates.isEmpty()) {
+                throw new IllegalStateException("El archivo de confianza SAP no contiene certificados X.509");
+            }
+            KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
+            trustStore.load(null, null);
+            int index = 0;
+            for (Certificate certificate : certificates) {
+                trustStore.setCertificateEntry("sap-" + index++, certificate);
+            }
+            TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(
+                TrustManagerFactory.getDefaultAlgorithm()
+            );
+            trustManagerFactory.init(trustStore);
+            SSLContext context = SSLContext.getInstance("TLS");
+            context.init(null, trustManagerFactory.getTrustManagers(), new SecureRandom());
+            return context;
+        } catch (IOException | GeneralSecurityException exception) {
+            throw new IllegalStateException("No se pudo cargar el certificado de confianza SAP", exception);
+        }
     }
 
     private record SapLoginRequest(
@@ -678,6 +725,32 @@ public class SapClient {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record SapBank(@JsonProperty("BankCode") String bankCode, @JsonProperty("BankName") String bankName) {}
+
+    private static final class VerifiedTlsRequestFactory extends SimpleClientHttpRequestFactory {
+        private static final HostnameVerifier DEFAULT_HOSTNAME_VERIFIER =
+            HttpsURLConnection.getDefaultHostnameVerifier();
+        private final String expectedHostname;
+        private final SSLContext trustContext;
+
+        private VerifiedTlsRequestFactory(String expectedHostname, SSLContext trustContext) {
+            this.expectedHostname = expectedHostname;
+            this.trustContext = trustContext;
+        }
+
+        @Override
+        protected void prepareConnection(HttpURLConnection connection, String httpMethod) throws IOException {
+            super.prepareConnection(connection, httpMethod);
+            if (connection instanceof HttpsURLConnection httpsConnection) {
+                if (trustContext != null) {
+                    httpsConnection.setSSLSocketFactory(trustContext.getSocketFactory());
+                }
+                if (!expectedHostname.isBlank()) {
+                    httpsConnection.setHostnameVerifier((ignoredUrlHostname, session) ->
+                        DEFAULT_HOSTNAME_VERIFIER.verify(expectedHostname, session));
+                }
+            }
+        }
+    }
 
     private static final class InsecureTlsRequestFactory extends SimpleClientHttpRequestFactory {
         private static final HostnameVerifier ACCEPT_ANY_HOST = (hostname, session) -> true;

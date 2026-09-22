@@ -16,6 +16,8 @@ public class SapProperties {
     private String companyDb;
 
     private boolean tlsRejectUnauthorized = true;
+    private String tlsExpectedHostname = "";
+    private String tlsTrustCertificatePath = "";
     private Duration connectTimeout = Duration.ofSeconds(10);
     private Duration readTimeout = Duration.ofSeconds(30);
 
@@ -41,6 +43,22 @@ public class SapProperties {
 
     public void setTlsRejectUnauthorized(boolean tlsRejectUnauthorized) {
         this.tlsRejectUnauthorized = tlsRejectUnauthorized;
+    }
+
+    public String getTlsExpectedHostname() {
+        return tlsExpectedHostname;
+    }
+
+    public void setTlsExpectedHostname(String tlsExpectedHostname) {
+        this.tlsExpectedHostname = tlsExpectedHostname;
+    }
+
+    public String getTlsTrustCertificatePath() {
+        return tlsTrustCertificatePath;
+    }
+
+    public void setTlsTrustCertificatePath(String tlsTrustCertificatePath) {
+        this.tlsTrustCertificatePath = tlsTrustCertificatePath;
     }
 
     public Duration getConnectTimeout() {
