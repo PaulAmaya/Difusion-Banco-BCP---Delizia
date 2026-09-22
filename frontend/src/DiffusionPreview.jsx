@@ -6,6 +6,14 @@ const accountFor = (payment, index) => index === '' || index == null ? undefined
   : payment.businessPartner?.bankAccounts?.find((account) => account.index === Number(index))
 const regionFor = (payment, regions) => regions?.find((region) => region.code === payment.businessPartner?.region?.code)
 
+function createRequestId() {
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
 function initialSelection(payment, selected, catalogs) {
   const partner = payment.businessPartner
   const requestedIndex = selected?.businessPartner?.selectedBankAccountIndex
@@ -120,7 +128,7 @@ export default function DiffusionPreview({ selectedPayments, sourceAccount, onCl
 
   async function send() {
     if (sendLock.current || !preview || !bankConfig?.ready || result || uncertain) return
-    const id = requestId || crypto.randomUUID()
+    const id = requestId || createRequestId()
     setRequestId(id)
     sendLock.current = true
     setSending(true)
