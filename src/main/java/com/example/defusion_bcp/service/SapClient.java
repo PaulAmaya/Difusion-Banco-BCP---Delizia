@@ -76,6 +76,14 @@ public class SapClient {
         this.restClient = RestClient.builder()
             .requestFactory(createRequestFactory(properties))
             .build();
+        log.info(
+            "SAP_TLS_CONFIG host={} certificateValidation={} expectedHostname={} trustCertificateConfigured={}",
+            sapHost(properties.getBaseUrl()),
+            properties.isTlsRejectUnauthorized(),
+            blankAsNotConfigured(properties.getTlsExpectedHostname()),
+            properties.getTlsTrustCertificatePath() != null
+                && !properties.getTlsTrustCertificatePath().isBlank()
+        );
     }
 
     public SapClient(SapProperties properties) {
@@ -126,14 +134,44 @@ public class SapClient {
             throw exception;
         } catch (RestClientResponseException exception) {
             if (exception.getStatusCode().is4xxClientError()) {
+                log.warn("SAP_LOGIN_REJECTED status={} endpoint={}", exception.getStatusCode().value(), loginEndpointForLog());
                 throw new BadCredentialsException("Credenciales SAP inválidas");
             }
+            log.error(
+                "SAP_LOGIN_HTTP_FAILED status={} endpoint={}",
+                exception.getStatusCode().value(),
+                loginEndpointForLog(),
+                exception
+            );
             throw new AuthenticationServiceException("SAP no está disponible", exception);
         } catch (ResourceAccessException exception) {
+            log.error("SAP_LOGIN_CONNECTION_FAILED endpoint={}", loginEndpointForLog(), exception);
             throw new AuthenticationServiceException("No se pudo conectar con SAP", exception);
         } catch (RestClientException | IllegalArgumentException exception) {
+            log.error("SAP_LOGIN_FAILED endpoint={}", loginEndpointForLog(), exception);
             throw new AuthenticationServiceException("No se pudo iniciar sesión en SAP", exception);
         }
+    }
+
+    private String loginEndpointForLog() {
+        try {
+            URI uri = operationUri("Login");
+            return uri.getScheme() + "://" + uri.getHost() + ":" + uri.getPort() + uri.getPath();
+        } catch (RuntimeException exception) {
+            return "invalid";
+        }
+    }
+
+    private static String sapHost(String baseUrl) {
+        try {
+            return URI.create(baseUrl).getHost();
+        } catch (RuntimeException exception) {
+            return "invalid";
+        }
+    }
+
+    private static String blankAsNotConfigured(String value) {
+        return value == null || value.isBlank() ? "NOT_CONFIGURED" : value.trim();
     }
 
     public void logoutQuietly(SapSession session) {
