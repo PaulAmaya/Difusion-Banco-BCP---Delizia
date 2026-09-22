@@ -13,6 +13,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class BankStatementClientTests {
+    private static final String CIPHER = "AAAAAAAAAAAAAAAAAAAAAA==";
     BankCryptoService crypto;
     BankStatementClient bank;
     BankPaymentClient payments;
@@ -25,19 +26,19 @@ class BankStatementClientTests {
         bank = new BankStatementClient(settings(false), payments, new ObjectMapper(), crypto);
     }
     @Test void http200WithFalseDecryptsOnlyMessageAndKeepsBodyNull() {
-        when(crypto.decrypt("encrypted-message")).thenReturn("Periodo no habilitado");
-        var response = bank.interpret(200, "{\"isOk\":false,\"message\":\"encrypted-message\",\"body\":null}");
+        when(crypto.decrypt(CIPHER)).thenReturn("Periodo no habilitado");
+        var response = bank.interpret(200, "{\"isOk\":false,\"message\":\"" + CIPHER + "\",\"body\":null}");
         assertThat(response.httpStatus()).isEqualTo(200);
         assertThat(response.isOk()).isFalse();
         assertThat(response.status()).isEqualTo(ProcessStatus.REJECTED);
         assertThat(response.decryptedMessage()).isEqualTo("Periodo no habilitado");
         assertThat(response.decryptedBody()).isNull();
-        verify(crypto, times(1)).decrypt("encrypted-message");
+        verify(crypto, times(1)).decrypt(CIPHER);
         verifyNoMoreInteractions(crypto);
     }
     @Test void http200WithTrueDecryptsBodyWithoutRequiringPaymentTransactionFields() {
-        when(crypto.decrypt("encrypted-body")).thenReturn("{\"movements\":[]}");
-        var response = bank.interpret(200, "{\"isOk\":true,\"message\":null,\"body\":\"encrypted-body\"}");
+        when(crypto.decrypt(CIPHER)).thenReturn("{\"movements\":[]}");
+        var response = bank.interpret(200, "{\"isOk\":true,\"message\":null,\"body\":\"" + CIPHER + "\"}");
         assertThat(response.status()).isEqualTo(ProcessStatus.COMPLETED);
         assertThat(response.httpStatus()).isEqualTo(200);
         assertThat(response.decryptedBody()).isEqualTo("{\"movements\":[]}");
@@ -54,22 +55,31 @@ class BankStatementClientTests {
         verifyNoInteractions(crypto);
     }
     @Test void preservesRawResponseWhenDecryptionFails() {
-        when(crypto.decrypt("bad-cipher")).thenThrow(new CryptoOperationException("test"));
-        String raw = "{\"isOk\":false,\"message\":\"bad-cipher\",\"body\":null}";
+        when(crypto.decrypt(CIPHER)).thenThrow(new CryptoOperationException("test"));
+        String raw = "{\"isOk\":false,\"message\":\"" + CIPHER + "\",\"body\":null}";
         var response = bank.interpret(200, raw);
         assertThat(response.rawResponse()).isEqualTo(raw);
         assertThat(response.httpStatus()).isEqualTo(200);
         assertThat(response.isOk()).isFalse();
         assertThat(response.error()).contains("desencriptar");
     }
+    @Test void keepsPlaintextBankRejectionWithoutTryingToDecryptIt() {
+        String message = "El servicio GetExtracts no esta habilitado";
+        var response = bank.interpret(200,
+            "{\"isOk\":false,\"message\":\"" + message + "\",\"body\":null}");
+        assertThat(response.status()).isEqualTo(ProcessStatus.REJECTED);
+        assertThat(response.decryptedMessage()).isEqualTo(message);
+        assertThat(response.error()).isNull();
+        verifyNoInteractions(crypto);
+    }
     @Test @SuppressWarnings("unchecked") void postsExactEnvelopeToGetExtractsOnceWithBasicAuthAndJson() throws Exception {
         var http = mock(HttpClient.class);
         var response = mock(HttpResponse.class);
         when(response.statusCode()).thenReturn(200);
-        when(response.body()).thenReturn("{\"isOk\":false,\"message\":\"cipher-error\",\"body\":null}");
+        when(response.body()).thenReturn("{\"isOk\":false,\"message\":\"" + CIPHER + "\",\"body\":null}");
         when(response.sslSession()).thenReturn(Optional.empty());
         when(http.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class))).thenReturn(response);
-        when(crypto.decrypt("cipher-error")).thenReturn("Rechazado");
+        when(crypto.decrypt(CIPHER)).thenReturn("Rechazado");
         var result = bank.send(new BankPaymentClient.PreparedClient(http, null), "{\"companyId\":2295,\"data\":\"cipher\",\"signature\":\"signed\"}");
         assertThat(result.httpStatus()).isEqualTo(200);
         var captor = ArgumentCaptor.forClass(HttpRequest.class);

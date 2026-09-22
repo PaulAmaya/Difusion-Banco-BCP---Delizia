@@ -98,15 +98,27 @@ public class BankStatementClient {
             isOk = flag.booleanValue();
             body = text(response, "body"); message = text(response, "message");
             String encrypted = isOk ? body : message;
+            log.info(
+                "BCP_EXTRACTS_RESPONSE_ENVELOPE isOk={} bodyPresent={} bodyLength={} messagePresent={} messageLength={} selectedField={} aesCiphertextShape={}",
+                isOk, body != null, length(body), message != null, length(message), isOk ? "body" : "message",
+                looksLikeAesCiphertext(encrypted)
+            );
             if (encrypted == null || encrypted.isBlank()) return failed(http, raw, isOk, body, message,
                 "El banco no devolvio " + (isOk ? "body" : "message") + " para desencriptar.");
+            if (!isOk && !looksLikeAesCiphertext(message)) {
+                log.warn("BCP_EXTRACTS_PLAINTEXT_REJECTION message={}", safeMessage(message));
+                return new StatementDtos.BankResponse(ProcessStatus.REJECTED,
+                    http, false, raw, body, message, null, message, null);
+            }
             String decrypted = crypto.decrypt(encrypted);
             log.info("BCP_EXTRACTS_DECRYPTED isOk={} field={} plaintextOmitted=true", isOk, isOk ? "body" : "message");
             return new StatementDtos.BankResponse(isOk ? ProcessStatus.COMPLETED : ProcessStatus.REJECTED,
                 http, isOk, raw, body, message, isOk ? decrypted : null, isOk ? null : decrypted, null);
         } catch (RuntimeException exception) {
-            log.error("BCP_EXTRACTS_DECRYPT_OR_PARSE_FAILED httpStatus={} exceptionType={} responseOmitted=true",
-                http, exception.getClass().getName());
+            log.error("BCP_EXTRACTS_DECRYPT_OR_PARSE_FAILED httpStatus={} exceptionType={} causeType={} reason={} responseOmitted=true",
+                http, exception.getClass().getName(),
+                exception.getCause() == null ? "none" : exception.getCause().getClass().getName(),
+                safeMessage(exception.getMessage()));
             return failed(http, raw, isOk, body, message, "No se pudo interpretar o desencriptar la respuesta BCP.");
         }
     }
@@ -116,6 +128,23 @@ public class BankStatementClient {
     }
     private StatementDtos.BankResponse failed(Integer http, String raw, Boolean isOk, String body, String message, String error) {
         return new StatementDtos.BankResponse(ProcessStatus.FAILED, http, isOk, raw, body, message, null, null, error);
+    }
+    private int length(String value) { return value == null ? 0 : value.length(); }
+    private boolean looksLikeAesCiphertext(String value) {
+        if (value == null || value.isBlank()) return false;
+        try {
+            byte[] decoded = Base64.getDecoder().decode(value.replaceAll("\\s", ""));
+            return decoded.length > 0 && decoded.length % 16 == 0;
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
+    }
+    private String safeMessage(String value) {
+        if (value == null) return "none";
+        String sanitized = value.replaceAll("[\\r\\n\\t]", " ")
+            .replaceAll("(?i)[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}", "[REDACTED_EMAIL]")
+            .replaceAll("(?<!\\d)\\d{5,}(?!\\d)", "[REDACTED_NUMBER]");
+        return sanitized.length() <= 300 ? sanitized : sanitized.substring(0, 300) + "...";
     }
     private long elapsed(long started) { return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started); }
 }

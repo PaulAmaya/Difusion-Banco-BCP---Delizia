@@ -3,7 +3,11 @@ package com.example.defusion_bcp.service;
 import com.example.defusion_bcp.dto.StatementDtos;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.HexFormat;
 import java.util.UUID;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -61,11 +65,19 @@ public class StatementRequestService {
         Long id = null;
         try (var ignored = MDC.putCloseable("bcpRequestId", correlation); var client = bank.prepare()) {
             stage = "ENCRYPT_AND_SIGN";
-            String data = crypto.encrypt(mapper.writeValueAsString(request.payload()));
+            String plaintext = mapper.writeValueAsString(request.payload());
+            log.info("BCP_EXTRACTS_PLAINTEXT_JSON payload={}", diagnosticPayload(request.payload()));
+            String data = crypto.encrypt(plaintext);
             var envelope = new LinkedHashMap<String, Object>();
             envelope.put("companyId", request.payload().companyId());
             envelope.put("data", data); envelope.put("signature", crypto.sign(data));
             String serialized = mapper.writeValueAsString(envelope);
+            String signature = String.valueOf(envelope.get("signature"));
+            log.info(
+                "BCP_EXTRACTS_ENCRYPTED_JSON companyId={} dataLength={} dataSha256={} signatureLength={} signatureSha256={} envelopeBytes={} encryptedValuesOmitted=true",
+                request.payload().companyId(), data.length(), sha256(data), signature.length(), sha256(signature),
+                serialized.getBytes(StandardCharsets.UTF_8).length
+            );
             stage = "SAVE_REQUEST";
             id = store.reserve(request.payload().accountNumber(), request.payload().period(), actor, company, correlation, serialized, ip);
             stage = "BANK_HTTP_POST";
@@ -83,4 +95,32 @@ public class StatementRequestService {
     }
     public List<StatementDtos.Response> listRecent(String company) { return store.history(company); }
     public StatementDtos.Response detail(Long id, String company) { return store.detail(id, company); }
+
+    private String diagnosticPayload(StatementDtos.BankPayload payload) {
+        var diagnostic = new LinkedHashMap<String, Object>();
+        diagnostic.put("companyId", payload.companyId());
+        diagnostic.put("password", "***REDACTED***");
+        diagnostic.put("documentNumber", mask(payload.documentNumber()));
+        diagnostic.put("documentType", payload.documentType());
+        diagnostic.put("documentExtension", payload.documentExtension());
+        diagnostic.put("accountNumber", mask(payload.accountNumber()));
+        diagnostic.put("period", payload.period());
+        return mapper.writeValueAsString(diagnostic);
+    }
+
+    private String mask(String value) {
+        if (value == null || value.isBlank()) return "";
+        String normalized = value.trim();
+        int visible = Math.min(4, normalized.length());
+        return "*".repeat(normalized.length() - visible) + normalized.substring(normalized.length() - visible);
+    }
+
+    private String sha256(String value) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 no esta disponible", exception);
+        }
+    }
 }
