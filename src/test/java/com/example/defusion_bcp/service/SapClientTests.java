@@ -11,11 +11,18 @@ import org.springframework.security.authentication.BadCredentialsException;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+
+import javax.net.ssl.SSLSession;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class SapClientTests {
     private HttpServer server;
@@ -66,6 +73,20 @@ class SapClientTests {
 
         assertThatThrownBy(() -> new SapClient(properties).login("wrong", "wrong"))
             .isInstanceOf(BadCredentialsException.class);
+    }
+
+    @Test
+    void validatesConfiguredHostnameAgainstCertificateSubjectAlternativeName() throws Exception {
+        SSLSession session = mock(SSLSession.class);
+        X509Certificate certificate = mock(X509Certificate.class);
+        when(session.getPeerCertificates()).thenReturn(new Certificate[]{certificate});
+        when(certificate.getSubjectAlternativeNames()).thenReturn(List.of(
+            List.of(2, "DELIZIA-SL2"),
+            List.of(7, "172.19.19.1")
+        ));
+
+        assertThat(SapClient.certificateMatchesExpectedHostname("DELIZIA-SL2", session)).isTrue();
+        assertThat(SapClient.certificateMatchesExpectedHostname("23.82.141.19", session)).isFalse();
     }
 
     private void send(HttpExchange exchange, int status, String body) throws IOException {

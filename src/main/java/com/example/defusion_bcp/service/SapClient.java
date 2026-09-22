@@ -25,9 +25,13 @@ import org.springframework.web.util.UriComponentsBuilder;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.net.ssl.SSLSession;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
+import javax.naming.InvalidNameException;
+import javax.naming.ldap.LdapName;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -38,6 +42,7 @@ import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
+import java.security.cert.CertificateParsingException;
 import java.security.cert.X509Certificate;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -670,6 +675,53 @@ public class SapClient {
         }
     }
 
+    static boolean certificateMatchesExpectedHostname(String expectedHostname, SSLSession session) {
+        String expected = normalizeHostname(expectedHostname);
+        if (expected.isBlank()) {
+            return false;
+        }
+        try {
+            Certificate[] peerCertificates = session.getPeerCertificates();
+            if (peerCertificates.length == 0 || !(peerCertificates[0] instanceof X509Certificate certificate)) {
+                return false;
+            }
+
+            boolean hasIdentitySubjectAlternativeName = false;
+            var subjectAlternativeNames = certificate.getSubjectAlternativeNames();
+            if (subjectAlternativeNames != null) {
+                for (List<?> entry : subjectAlternativeNames) {
+                    if (entry.size() < 2 || !(entry.getFirst() instanceof Number type)) {
+                        continue;
+                    }
+                    int nameType = type.intValue();
+                    if (nameType != 2 && nameType != 7) {
+                        continue;
+                    }
+                    hasIdentitySubjectAlternativeName = true;
+                    if (expected.equals(normalizeHostname(String.valueOf(entry.get(1))))) {
+                        return true;
+                    }
+                }
+            }
+            if (hasIdentitySubjectAlternativeName) {
+                return false;
+            }
+
+            LdapName subject = new LdapName(certificate.getSubjectX500Principal().getName());
+            return subject.getRdns().stream()
+                .filter(rdn -> "CN".equalsIgnoreCase(rdn.getType()))
+                .map(rdn -> normalizeHostname(String.valueOf(rdn.getValue())))
+                .anyMatch(expected::equals);
+        } catch (SSLPeerUnverifiedException | CertificateParsingException | InvalidNameException exception) {
+            return false;
+        }
+    }
+
+    private static String normalizeHostname(String hostname) {
+        String normalized = hostname == null ? "" : hostname.trim().toLowerCase(Locale.ROOT);
+        return normalized.endsWith(".") ? normalized.substring(0, normalized.length() - 1) : normalized;
+    }
+
     private record SapLoginRequest(
         @JsonProperty("CompanyDB") String companyDb,
         @JsonProperty("UserName") String username,
@@ -765,8 +817,6 @@ public class SapClient {
     private record SapBank(@JsonProperty("BankCode") String bankCode, @JsonProperty("BankName") String bankName) {}
 
     private static final class VerifiedTlsRequestFactory extends SimpleClientHttpRequestFactory {
-        private static final HostnameVerifier DEFAULT_HOSTNAME_VERIFIER =
-            HttpsURLConnection.getDefaultHostnameVerifier();
         private final String expectedHostname;
         private final SSLContext trustContext;
 
@@ -784,7 +834,7 @@ public class SapClient {
                 }
                 if (!expectedHostname.isBlank()) {
                     httpsConnection.setHostnameVerifier((ignoredUrlHostname, session) ->
-                        DEFAULT_HOSTNAME_VERIFIER.verify(expectedHostname, session));
+                        certificateMatchesExpectedHostname(expectedHostname, session));
                 }
             }
         }
