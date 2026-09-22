@@ -30,7 +30,10 @@ services:
       DB_PASSWORD: ${MYSQL_PASSWORD:?Complete MYSQL_PASSWORD}
       SAP_BASE_URL: ${SAP_BASE_URL:?Complete SAP_BASE_URL}
       SAP_COMPANY_DB: ${SAP_COMPANY_DB:?Complete SAP_COMPANY_DB}
-      SAP_TLS_REJECT_UNAUTHORIZED: "true"
+      # SAP is currently reached by IP while its certificate is issued to DELIZIA-SL2.
+      # Keep verification enabled by default; the server env may explicitly disable it
+      # when the IP endpoint is mandatory.
+      SAP_TLS_REJECT_UNAUTHORIZED: ${SAP_TLS_REJECT_UNAUTHORIZED:-true}
       BCP_ENVIRONMENT: "PRODUCTION"
       BCP_PAYMENTS_ENABLED: ${BCP_PAYMENTS_ENABLED:-false}
       BCP_ALLOW_DOCUMENT_REVERSAL: "false"
