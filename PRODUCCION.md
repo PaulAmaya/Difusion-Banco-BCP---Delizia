@@ -16,11 +16,11 @@ Para pagos completar tambien concepto, origen/destino de fondos, correo y autori
 
 ## Acceso por red
 
-`PORTAL_BIND_IP` es la IP privada real del SERVIDOR. `PORTAL_PORT=8081` publica el frontend, no el backend. `FRONTEND_ORIGIN` debe ser la direccion HTTPS completa que usaran los usuarios, incluyendo el puerto.
+`PORTAL_BIND_IP` es la IP privada real del SERVIDOR. `PORTAL_PORT=8081` publica el frontend, no el backend. `FRONTEND_ORIGIN` debe ser la direccion HTTP completa que usaran los usuarios, incluyendo el puerto, por ejemplo `http://192.168.1.50:8081`.
 
-El portal necesita un certificado HTTPS de su dominio interno o IP y su clave PEM: `PORTAL_TLS_CERT_HOST_PATH` y `PORTAL_TLS_KEY_HOST_PATH`. Son distintos de los certificados BCP. La autoridad emisora debe ser confiable para los equipos de la empresa y el certificado debe incluir el nombre o IP utilizado. No desactivar validacion ni aceptar advertencias como solucion.
+Este despliegue publica HTTP interno y no requiere `fullchain.pem` ni `private.key`. Por ello las credenciales SAP y los datos mostrados por el portal no quedan cifrados entre el navegador y el servidor. Debe limitarse estrictamente a la red corporativa y no exponerse a Internet. Los certificados BCP siguen siendo obligatorios y protegen la comunicacion entre el backend y el banco, no el acceso web de los usuarios.
 
-Autorizar el puerto TCP 8081 en el firewall SOLO para la red corporativa permitida. No publicar MySQL ni el backend, ni abrir el portal a Internet. Backend y base de datos permanecen en redes Docker; Nginx comunica `/api` internamente.
+Autorizar el puerto TCP 8081 en el firewall SOLO para la red corporativa permitida. No publicar MySQL ni el backend, ni abrir el portal a Internet. Backend y base de datos permanecen en redes Docker; Nginx comunica `/api` internamente. La cookie de sesion se configura sin la marca `Secure` exclusivamente para este modo HTTP.
 
 ## Despliegue
 
@@ -33,7 +33,7 @@ docker compose --env-file .env.production -f compose.production.yaml ps
 docker compose --env-file .env.production -f compose.production.yaml logs --tail 100 backend
 ```
 
-Abrir `https://IP_O_NOMBRE_DEL_SERVIDOR:8081` desde el servidor y desde otro equipo autorizado. Probar login SAP, filtros, consulta de extractos y descarga/visualizacion de respuestas. `BCP_PAYMENTS_ENABLED=false` bloquea inicialmente las consultas/envios al banco; habilitarlo expresamente solo despues de validar credenciales y certificados.
+Abrir `http://IP_O_NOMBRE_DEL_SERVIDOR:8081` desde el servidor y desde otro equipo autorizado. Probar login SAP, filtros, consulta de extractos y descarga/visualizacion de respuestas. `BCP_PAYMENTS_ENABLED=false` bloquea inicialmente las consultas/envios al banco; habilitarlo expresamente solo despues de validar credenciales y certificados.
 
 TLS al banco inicia con TLS 1.3 y validacion de servidor activa; confirmar el protocolo negociado en productivo. La compatibilidad RSA antigua queda exclusivamente en sandbox. La reversion local de documentos esta deshabilitada en produccion. No existen reintentos automaticos para pagos ambiguos.
 

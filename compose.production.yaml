@@ -59,7 +59,7 @@ services:
       BCP_SIGNING_CERTIFICATE_PATH: ${BCP_SIGNING_CERTIFICATE_PATH:?Complete BCP_SIGNING_CERTIFICATE_PATH}
       BCP_SIGNING_CERTIFICATE_PASSWORD: ${BCP_SIGNING_CERTIFICATE_PASSWORD:-}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:?Complete FRONTEND_ORIGIN}
-      SESSION_COOKIE_SECURE: "true"
+      SESSION_COOKIE_SECURE: "false"
       LOG_FILE: /app/logs/defusion-bcp.log
       TZ: America/La_Paz
     volumes:
@@ -85,27 +85,15 @@ services:
     build: ./frontend
     restart: unless-stopped
     ports:
-      - "${PORTAL_BIND_IP:?Complete PORTAL_BIND_IP}:${PORTAL_PORT:-8081}:443"
+      - "${PORTAL_BIND_IP:?Complete PORTAL_BIND_IP}:${PORTAL_PORT:-8081}:80"
     volumes:
-      - ./frontend/nginx.production.conf:/etc/nginx/conf.d/default.conf:ro
-      - type: bind
-        source: ${PORTAL_TLS_CERT_HOST_PATH:?Complete PORTAL_TLS_CERT_HOST_PATH}
-        target: /run/portal-tls/fullchain.pem
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ${PORTAL_TLS_KEY_HOST_PATH:?Complete PORTAL_TLS_KEY_HOST_PATH}
-        target: /run/portal-tls/private.key
-        read_only: true
-        bind:
-          create_host_path: false
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     networks: [portal]
     depends_on:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/healthz || exit 1"]
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/healthz || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 5
