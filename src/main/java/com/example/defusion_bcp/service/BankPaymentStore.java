@@ -5,6 +5,8 @@ import com.example.defusion_bcp.dto.*;
 import com.example.defusion_bcp.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import java.util.*;
 
 @Service
@@ -29,6 +31,15 @@ public class BankPaymentStore {
     @Transactional(readOnly = true)
     public List<BankPaymentDtos.SubmissionResponse> history(String company) {
         return submissions.findTop50ByCompanyDbOrderByCreatedAtDesc(company).stream().map(this::response).toList();
+    }
+    @Transactional(readOnly = true)
+    public Page<BankPaymentDtos.SubmissionResponse> successfulCandidates(String company, int page) {
+        return submissions.findByCompanyDbAndStatusAndBankTransactionIdIsNotNullOrderByCreatedAtDesc(
+            company, ProcessStatus.SENT, PageRequest.of(Math.max(0, page), 20)).map(this::response);
+    }
+    @Transactional(readOnly = true)
+    public Optional<BankPaymentDtos.SubmissionResponse> findById(Long id, String company) {
+        return submissions.findByIdAndCompanyDb(id, company).map(this::response);
     }
     @Transactional(readOnly = true)
     public Set<Long> blockedIds(String company) { return documents.blockedIds(company); }

@@ -24,6 +24,10 @@ public record BankPaymentSettings(
         return production() ? "https://credinetweb.bcp.com.bo/ApiCwV2/api/APIAuth/GetExtracts"
             : "https://www99.bancred.com.bo/ApiCwV2/api/APIAuth/GetExtracts";
     }
+    public String batchDetailUrl() {
+        return production() ? "https://credinetweb.bcp.com.bo/ApiCwV2/api/APIAuth/GetBatchDetail"
+            : "https://www99.bancred.com.bo/ApiCwV2/api/APIAuth/GetBatchDetail";
+    }
     @org.springframework.beans.factory.annotation.Autowired
     public BankPaymentSettings {}
 

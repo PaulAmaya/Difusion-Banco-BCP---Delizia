@@ -39,7 +39,8 @@ final class BankSandboxCurlTransport {
             || !BankPaymentClient.SANDBOX_URL.equals(settings.url())
             || !"TLSv1.2".equalsIgnoreCase(settings.tlsProtocols().trim())
             || settings.authCertificatePath().isBlank()
-            || !Set.of(BankPaymentClient.SANDBOX_URL, BankStatementClient.SANDBOX_URL).contains(endpoint)) {
+            || !Set.of(BankPaymentClient.SANDBOX_URL, BankStatementClient.SANDBOX_URL,
+                BankBatchDetailClient.SANDBOX_URL).contains(endpoint)) {
             throw new SapServiceException(HttpStatus.BAD_REQUEST, "BANK_LEGACY_SCOPE_INVALID",
                 "La compatibilidad RSA requiere el sandbox BCP, TLSv1.2 y el certificado de autenticacion PFX");
         }

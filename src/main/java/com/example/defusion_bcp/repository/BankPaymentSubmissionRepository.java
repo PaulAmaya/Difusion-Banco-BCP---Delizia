@@ -2,6 +2,9 @@ package com.example.defusion_bcp.repository;
 
 import com.example.defusion_bcp.domain.BankPaymentSubmission;
 import org.springframework.data.jpa.repository.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import com.example.defusion_bcp.domain.ProcessStatus;
 import java.util.*;
 
 public interface BankPaymentSubmissionRepository extends JpaRepository<BankPaymentSubmission, Long> {
@@ -13,4 +16,6 @@ public interface BankPaymentSubmissionRepository extends JpaRepository<BankPayme
     List<BankPaymentSubmission> findTop50ByCompanyDbOrderByCreatedAtDesc(String companyDb);
     @EntityGraph(attributePaths = "documents")
     Optional<BankPaymentSubmission> findByIdAndCompanyDb(Long id, String companyDb);
+    Page<BankPaymentSubmission> findByCompanyDbAndStatusAndBankTransactionIdIsNotNullOrderByCreatedAtDesc(
+        String companyDb, ProcessStatus status, Pageable pageable);
 }

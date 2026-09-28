@@ -64,6 +64,10 @@ export const api = {
   batches: () => request('/api/payment-batches'),
   bankPaymentConfig: () => request('/api/bank/multiple-payments/config'),
   bankPaymentHistory: () => request('/api/bank/multiple-payments'),
+  bankBatchDetails: (page = 0) => request(`/api/bank/batch-details?page=${page}`),
+  queryBankBatchDetail: (submissionId) => request(`/api/bank/batch-details/${encodeURIComponent(submissionId)}/query`, {
+    method: 'POST',
+  }),
   releaseDiffusion: (id, reason, acknowledgeDuplicateRisk) => request(`/api/bank/multiple-payments/${id}/release`, {
     method: 'POST', body: JSON.stringify({ reason, acknowledgeDuplicateRisk }),
   }),

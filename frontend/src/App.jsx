@@ -3,7 +3,7 @@ import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, use
 import {
   Activity, AlertCircle, ArrowLeft, Banknote, Braces, Building2, CalendarDays, Check,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleDollarSign, Eye, EyeOff, FileClock, FileText,
-  Copy, Settings, Landmark, LoaderCircle, LockKeyhole, LogOut, Menu,
+  Copy, Settings, Landmark, ClipboardList, LoaderCircle, LockKeyhole, LogOut, Menu,
   RefreshCw, Search, ShieldCheck, SlidersHorizontal, UserRound, Users,
   WalletCards, X,
 } from 'lucide-react'
@@ -12,6 +12,8 @@ import DiffusionPreview from './DiffusionPreview.jsx'
 import SessionGuard from './SessionGuard.jsx'
 import BankSubmissionHistory from './BankSubmissionHistory.jsx'
 import StatementsPage from './StatementsPage.jsx'
+import StatementDetailPage from './StatementDetailPage.jsx'
+import BatchDetailsPage from './BatchDetailsPage.jsx'
 import deliziaLogo from './img/logo-negativo.png'
 import { portalRelease } from './portalRelease.js'
 
@@ -136,6 +138,7 @@ function PortalLayout({ user, onLogout }) {
 
   const nav = [
     { to: '/pagos', label: 'Pagos múltiples', icon: WalletCards },
+    { to: '/detalle-pagos', label: 'Detalle de pagos', icon: ClipboardList },
     { to: '/extractos', label: 'Extractos BCP', icon: FileText },
     { to: '/logs', label: 'Logs de Actividades', icon: FileClock },
     { to: '/configuracion', label: 'Configuración', icon: Settings },
@@ -166,7 +169,9 @@ function PortalLayout({ user, onLogout }) {
           <Route path="/" element={<Navigate to="/pagos" replace />} />
           <Route path="/pagos" element={<PaymentsPage />} />
           <Route path="/pagos/:docEntry" element={<VendorPaymentDetailPage />} />
+          <Route path="/detalle-pagos" element={<BatchDetailsPage PageTitle={PageTitle} StatusBadge={StatusBadge} dateTime={dateTime} />} />
           <Route path="/extractos" element={<StatementsPage PageTitle={PageTitle} StatusBadge={StatusBadge} dateTime={dateTime} />} />
+          <Route path="/extractos/:id" element={<StatementDetailPage PageTitle={PageTitle} StatusBadge={StatusBadge} dateTime={dateTime} />} />
           <Route path="/configuracion" element={<ConfigurationPage />} />
           <Route path="/logs" element={<LogsPage />} />
           <Route path="*" element={<Navigate to="/pagos" replace />} />
