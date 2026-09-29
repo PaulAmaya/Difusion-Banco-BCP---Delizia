@@ -56,7 +56,7 @@ class SapAuthenticationProviderTests {
 
     @Test
     void onlyNamedAdminsBypassSapUserFields() {
-        for (String username : new String[]{"SIS37", "SIS21"}) {
+        for (String username : new String[]{"SIS37", "SIS21", "TES01", "TES03", "TES04"}) {
             SapClient sapClient = mock(SapClient.class);
             SapSession session = session();
             when(sapClient.login(username, "secret")).thenReturn(session);
@@ -68,6 +68,20 @@ class SapAuthenticationProviderTests {
                 .containsExactlyInAnyOrder("ROLE_ADMIN", "ROLE_TREASURY", "FACTOR_SAP");
             verify(sapClient, never()).userAccess(session, username);
         }
+    }
+
+    @Test
+    void otherTesUsersDoNotGetAdminAccessByPrefix() {
+        SapClient sapClient = mock(SapClient.class);
+        SapSession session = session();
+        when(sapClient.login("TES02", "secret")).thenReturn(session);
+        when(sapClient.userAccess(session, "TES02")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> new SapAuthenticationProvider(sapClient).authenticate(
+            UsernamePasswordAuthenticationToken.unauthenticated("TES02", "secret")))
+            .isInstanceOf(DisabledException.class);
+        verify(sapClient).userAccess(session, "TES02");
+        verify(sapClient).logoutQuietly(session);
     }
 
     @Test

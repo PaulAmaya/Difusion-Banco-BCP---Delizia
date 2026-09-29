@@ -20,7 +20,7 @@ import java.util.Set;
 @Component
 public class SapAuthenticationProvider implements AuthenticationProvider {
     private static final Logger log = LoggerFactory.getLogger(SapAuthenticationProvider.class);
-    private static final Set<String> ADMIN_USERS = Set.of("SIS37", "SIS21");
+    private static final Set<String> ADMIN_USERS = Set.of("SIS37", "SIS21", "TES01", "TES03", "TES04");
     private static final Set<String> TREASURY_AREAS = Set.of("TES_LP", "TES_SC");
 
     private final SapClient sapClient;
