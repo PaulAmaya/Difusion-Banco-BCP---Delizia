@@ -12,7 +12,7 @@ Para valores con caracteres especiales como `$` o `#`, usar comillas simples en 
 
 Colocar los tres certificados productivos en una carpeta protegida FUERA del repositorio. Configurar `BCP_CERT_HOST_DIRECTORY` con su ruta en el servidor y los tres `*_CERTIFICATE_PATH` con sus nombres dentro de `/run/bcp-certs/`. Docker los monta solo para lectura. Las contrasenas PFX se configuran por separado, nunca en React ni en logs. Confirmar con BCP la funcion de cada archivo: autenticacion PFX, firma/encriptacion PFX y BUSINESS CER; el CER publico no requiere contrasena.
 
-Para pagos completar tambien concepto, origen/destino de fondos, correo y autorizadores reales en `BANK_DIFFUSION_APPROVERS_JSON`. Verificar las cuentas de origen BCP LP y BCP SC antes de enviar. No se usan los autorizadores de prueba en produccion.
+Para pagos completar tambien concepto, correo y autorizadores reales en `BANK_DIFFUSION_APPROVERS_JSON`. `fundSource` se genera segun la cuenta de origen BCP LP o BCP SC; `fundDestination` se genera con los CardCode de los socios incluidos en el lote. Verificar las cuentas de origen antes de enviar. No se usan los autorizadores de prueba en produccion.
 
 ## Acceso por red
 

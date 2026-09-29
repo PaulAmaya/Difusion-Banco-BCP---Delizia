@@ -44,8 +44,6 @@ public class DiffusionPreviewService {
         @Value("${BCP_COMPANY_ID:2295}") Integer companyId,
         @Value("${BANK_DIFFUSION_DOCUMENT_TYPE:Q}") String documentType,
         @Value("${BANK_DIFFUSION_DOCUMENT_EXTENSION:LP}") String documentExtension,
-        @Value("${BANK_DIFFUSION_FUND_SOURCE:Ambiente sandbox}") String fundSource,
-        @Value("${BANK_DIFFUSION_FUND_DESTINATION:Ambiente de pruebas}") String fundDestination,
         @Value("${BANK_DIFFUSION_DESCRIPTION:Descripcion prueba}") String description,
         @Value("${BANK_DIFFUSION_SEND_VOUCHERS:}") String sendVouchers,
         @Value("${BANK_DIFFUSION_APPROVERS_JSON:}") String approvers,
@@ -54,8 +52,6 @@ public class DiffusionPreviewService {
         header.put("companyId", companyId);
         header.put("documentType", documentType);
         header.put("documentExtension", documentExtension);
-        header.put("fundSource", fundSource);
-        header.put("fundDestination", fundDestination);
         header.put("description", description);
         header.put("sendVouchers", sendVouchers);
         if (environment.equalsIgnoreCase("PRODUCTION") || !approvers.isBlank()) {
@@ -86,8 +82,9 @@ public class DiffusionPreviewService {
         List<Map<String, Object>> ach = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         List<DiffusionDtos.DocumentSnapshot> documents = new ArrayList<>();
+        Set<String> cardCodes = new LinkedHashSet<>();
         BigDecimal total = BigDecimal.ZERO;
-        DiffusionDtos.Region batchRegion = null;
+        Map<String, DiffusionDtos.Region> batchRegions = new LinkedHashMap<>();
 
         for (DiffusionDtos.Selection selection : request.payments()) {
             // Read amounts and beneficiary accounts again instead of trusting browser snapshots.
@@ -127,10 +124,7 @@ public class DiffusionPreviewService {
             if (!sapRegion.code().equals(region.code())) {
                 throw invalid("La region seleccionada no coincide con BusinessPartners.U_CITY del pago " + payment.docNum());
             }
-            if (batchRegion != null && !batchRegion.code().equals(region.code())) {
-                throw invalid("Todos los pagos del lote deben pertenecer a la misma region");
-            }
-            batchRegion = region;
+            batchRegions.putIfAbsent(region.code(), region);
             String documentNumber = sapOrManual(partner.documentNumber(), selection.documentNumber(), "numero de documento", payment.docNum());
             String sapType = SapDocumentMapper.documentType(partner.sapDocumentType(), catalogs);
             String documentType = sapOrManual(sapType,
@@ -145,13 +139,14 @@ public class DiffusionPreviewService {
             BigDecimal amount = payment.transferSum().setScale(2, RoundingMode.UNNECESSARY);
             documents.add(new DiffusionDtos.DocumentSnapshot(payment.docEntry(), payment.docNum(),
                 payment.cardCode(), payment.cardName(), amount));
+            cardCodes.add(payment.cardCode().trim());
             Map<String, Object> line = new LinkedHashMap<>();
             boolean bcp = "1005".equals(bankCode);
             line.put("paymentType", bcp ? "PROV" : "ACH");
             line.put("line", (bcp ? providers.size() : ach.size()) + 1);
             line.put("accountNumber", account.accountNumber().trim());
-            if (bcp) line.put("glossPayment", bankGloss(payment.journalRemarks()));
-            else line.put("titularName", text(account.accountName()).isEmpty() ? partner.cardName() : account.accountName().trim());
+            line.put("glossPayment", bankGloss(payment.journalRemarks()));
+            if (!bcp) line.put("titularName", text(account.accountName()).isEmpty() ? partner.cardName() : account.accountName().trim());
             line.put("amount", amount);
             if (!bcp) line.put("branchOfficeId", region.cityCode());
             if (bcp) {
@@ -179,8 +174,16 @@ public class DiffusionPreviewService {
         }
         Map<String, Object> payload = new LinkedHashMap<>(header);
         payload.put("sourceAccount", source.bankAccount());
+        payload.put("fundSource", switch (source.region()) {
+            case "LP" -> "Difusion Cuenta de LP";
+            case "SC" -> "Difusion Cuenta de SC";
+            default -> throw invalid("La cuenta de origen no tiene region BCP configurada");
+        });
+        payload.put("fundDestination", "Destinos para " + String.join(", ", cardCodes));
         payload.put("amount", total.setScale(2));
         payload.put("spreadsheet", Map.of("formProvidersPayments", providers, "formAchPayments", ach));
+        DiffusionDtos.Region batchRegion = batchRegions.size() == 1 ? batchRegions.values().iterator().next()
+            : new DiffusionDtos.Region("MX", "Varias regiones", catalogs.notApplicableCityCode());
         if (text((String) header.get("password")).isEmpty() || text((String) header.get("documentNumber")).isEmpty()) {
             warnings.add("Cabecera pendiente: configure BANK_DIFFUSION_PASSWORD y BANK_DIFFUSION_DOCUMENT_NUMBER.");
         }
@@ -217,7 +220,7 @@ public class DiffusionPreviewService {
             throw invalid("Configure BANK_DIFFUSION_APPROVERS_JSON con los autorizadores reales");
         }
         for (String field : List.of("password", "documentNumber", "documentType", "documentExtension",
-            "fundSource", "fundDestination", "sourceAccount", "description")) {
+            "sourceAccount", "description")) {
             if (!(payload.get(field) instanceof String value) || value.isBlank()) {
                 throw invalid("Cabecera incompleta: " + field + ". Configure los datos del preparador antes de enviar");
             }

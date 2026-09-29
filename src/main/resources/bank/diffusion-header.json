@@ -7,8 +7,6 @@
   "documentComplement": "",
   "amount": 0,
   "currency": "BOL",
-  "fundSource": "Ambiente sanbox",
-  "fundDestination": "AMbiente de pruebas",
   "sourceAccount": "",
   "sourceCurrency": "BOL",
   "description": "Descripcion prueba",

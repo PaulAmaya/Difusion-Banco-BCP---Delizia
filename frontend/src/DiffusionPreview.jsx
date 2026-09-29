@@ -32,6 +32,29 @@ function initialSelection(payment, selected, catalogs) {
   }
 }
 
+const amount = (value) => new Intl.NumberFormat('es-BO', {
+  minimumFractionDigits: 2, maximumFractionDigits: 2,
+}).format(Number(value ?? 0))
+
+function GeneratedPaymentTable({ payload }) {
+  const spreadsheet = payload.spreadsheet ?? {}
+  const lines = [
+    ...(spreadsheet.formProvidersPayments ?? []),
+    ...(spreadsheet.formAchPayments ?? []),
+  ]
+  return <div className="table-scroll"><table className="diffusion-generated-table">
+    <thead><tr><th>Tipo</th><th>Línea</th><th>Beneficiario / cuenta</th><th>Documento</th><th>Glosa / detalle</th><th className="amount">Importe BOL</th></tr></thead>
+    <tbody>{lines.map((line, index) => <tr key={`${line.paymentType}-${line.line}-${index}`}>
+      <td><strong>{line.paymentType}</strong>{line.bankId && <small>Banco {line.bankId}</small>}</td>
+      <td>{line.line}</td>
+      <td>{line.titularName && <strong>{line.titularName}</strong>}<small className="mono">{line.accountNumber}</small></td>
+      <td>{line.documentNumber}<small>{line.documentType} · {line.documentExtension}</small></td>
+      <td>{line.glossPayment || line.firstDetail || '—'}</td>
+      <td className="amount">{amount(line.amount)}</td>
+    </tr>)}</tbody>
+  </table></div>
+}
+
 export default function DiffusionPreview({ selectedPayments, sourceAccount, onClose, onGenerated, onSent, onBusy }) {
   const [prepared, setPrepared] = useState(null)
   const [selections, setSelections] = useState([])
@@ -159,8 +182,8 @@ export default function DiffusionPreview({ selectedPayments, sourceAccount, onCl
     }
   }
 
-  const regions = new Set(selections.map((item) => item.region).filter(Boolean))
-  const mixedRegions = regions.size > 1
+  const regions = [...new Set(selections.map((item) => item.region).filter(Boolean))]
+  const regionNames = regions.map((code) => prepared?.catalogs.regions.find((item) => item.code === code)?.name ?? code).join(', ')
   const incomplete = selections.some((item) => item.bankAccountIndex === '' || !item.region)
 
   return <section className="panel diffusion-preview" aria-label="Previsualización de difusión">
@@ -187,17 +210,19 @@ export default function DiffusionPreview({ selectedPayments, sourceAccount, onCl
             <td><input aria-label={`Complemento del pago ${payment.docNum}`} value={selection.documentComplement} maxLength={20} onChange={(event) => update(payment.docEntry, 'documentComplement', event.target.value)} disabled={bank?.code === '1005'} /></td>
           </tr>
         })}</tbody></table></div>
-        {mixedRegions && <div className="alert error diffusion-alert"><AlertCircle size={18} />Los pagos seleccionados pertenecen a distintas regiones. Cree un lote por región.</div>}
         {incomplete && <div className="alert warning diffusion-alert"><AlertCircle size={18} />Seleccione una cuenta para cada pago. BusinessPartners.U_CITY debe contener una región válida.</div>}
-        <div className="diffusion-actions"><button className="button primary" disabled={generating || mixedRegions || incomplete}>{generating ? <LoaderCircle size={17} className="spin" /> : <Braces size={17} />}{generating ? 'Generando' : 'Generar JSON del lote'}</button></div>
+        <div className="diffusion-actions"><button className="button primary" disabled={generating || incomplete}>{generating ? <LoaderCircle size={17} className="spin" /> : <Braces size={17} />}{generating ? 'Generando' : 'Generar JSON del lote'}</button></div>
         </fieldset>
       </form>}
       {preview && <>
-        <div className="panel-header"><div><h2>JSON del lote · {preview.region.name}</h2><p>{preview.docEntries.length} pagos · {preview.correlationId}</p></div><button className="button secondary" type="button" onClick={copyJson}>{copied ? <Check size={16} /> : <Copy size={16} />}{copied ? 'Copiado' : 'Copiar JSON'}</button></div>
-        <div className="diffusion-output"><ul className="diffusion-warnings">{preview.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul><textarea aria-label="JSON de difusión" className="code-editor" value={JSON.stringify(preview.payload, null, 2)} readOnly spellCheck="false" /></div>
+        <div className="panel-header"><div><h2>Resumen del lote · {preview.region.name}</h2><p>{preview.docEntries.length} pagos · {preview.correlationId}</p></div></div>
+        <dl className="diffusion-generated-summary"><div><dt>Cuenta de origen</dt><dd className="mono">{preview.payload.sourceAccount}</dd></div><div><dt>Origen / destino de fondos</dt><dd>{preview.payload.fundSource}<small>{preview.payload.fundDestination}</small></dd></div><div><dt>Importe total</dt><dd>{amount(preview.payload.amount)} BOL</dd></div></dl>
+        <GeneratedPaymentTable payload={preview.payload} />
+        {preview.warnings.length > 0 && <ul className="diffusion-warnings diffusion-generated-warnings">{preview.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>}
+        <details className="diffusion-json"><summary>Ver JSON del lote</summary><div className="diffusion-json-toolbar"><button className="button secondary" type="button" onClick={copyJson}>{copied ? <Check size={16} /> : <Copy size={16} />}{copied ? 'Copiado' : 'Copiar JSON'}</button></div><pre aria-label="JSON de difusión">{JSON.stringify(preview.payload, null, 2)}</pre></details>
         <div className="diffusion-actions"><span>{bankConfig?.message || 'Consultando configuracion bancaria'}</span><button type="button" className="button primary" disabled={!bankConfig?.ready || !preview.fingerprint || sending || Boolean(result) || uncertain} onClick={() => setConfirming(true)}>{sending ? <LoaderCircle className="spin" size={17} /> : <Send size={17} />}{sending ? 'Enviando' : bankConfig?.environment === 'PRODUCTION' ? 'Enviar a BCP · Producción' : 'Enviar a BCP · Pruebas'}</button></div>
       </>}
     </>}
-    {confirming && <div className="modal-backdrop"><section ref={confirmationRef} className="bank-confirm" role="dialog" aria-modal="true" aria-labelledby="bank-confirm-title"><h2 id="bank-confirm-title">Confirmar envío a BCP</h2><dl><dt>Ambiente</dt><dd>{bankConfig?.environment === 'PRODUCTION' ? 'BCP Producción' : 'BCP Sandbox'}</dd><dt>Documentos SAP</dt><dd>{preview.docEntries.length}</dd><dt>Departamento</dt><dd>{preview.region.name}</dd><dt>Cuenta de origen</dt><dd>{preview.payload.sourceAccount}</dd><dt>Importe total</dt><dd>{new Intl.NumberFormat('es-BO', { minimumFractionDigits: 2 }).format(preview.payload.amount)} BOL</dd></dl><p>El lote se preparara en el banco y quedara pendiente de autorizacion.</p><div className="diffusion-actions"><button type="button" className="button secondary" autoFocus onClick={() => setConfirming(false)}><X size={17} />Cancelar</button><button type="button" className="button primary" onClick={send}><Send size={17} />Confirmar envio</button></div></section></div>}
+    {confirming && <div className="modal-backdrop"><section ref={confirmationRef} className="bank-confirm" role="dialog" aria-modal="true" aria-labelledby="bank-confirm-title"><h2 id="bank-confirm-title">Confirmar envío a BCP</h2><dl><dt>Ambiente</dt><dd>{bankConfig?.environment === 'PRODUCTION' ? 'BCP Producción' : 'BCP Sandbox'}</dd><dt>Documentos SAP</dt><dd>{preview.docEntries.length}</dd><dt>Regiones</dt><dd>{regionNames}</dd><dt>Cuenta de origen</dt><dd>{preview.payload.sourceAccount}</dd><dt>Importe total</dt><dd>{new Intl.NumberFormat('es-BO', { minimumFractionDigits: 2 }).format(preview.payload.amount)} BOL</dd></dl><p>El lote se preparara en el banco y quedara pendiente de autorizacion.</p><div className="diffusion-actions"><button type="button" className="button secondary" autoFocus onClick={() => setConfirming(false)}><X size={17} />Cancelar</button><button type="button" className="button primary" onClick={send}><Send size={17} />Confirmar envio</button></div></section></div>}
   </section>
 }

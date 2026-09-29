@@ -97,7 +97,7 @@ export default function BatchDetailsPage({ PageTitle, StatusBadge, dateTime }) {
           : <div className="table-scroll"><table className="batch-list-table"><thead><tr><th>Enviado</th><th>ID BCP</th><th>Cuenta origen</th><th>Region</th><th>Importe BOL</th><th>Documentos SAP</th><th>Detalle</th></tr></thead><tbody>
             {history.items.map((item) => <tr key={item.submissionId} className={selectedId === item.submissionId ? 'selected-row' : ''}>
               <td>{dateTime(item.sentAt)}<small>{shown(item.requestedBy)}</small></td>
-              <td className="mono">{item.transactionId}</td><td className="mono">{item.sourceAccount}</td><td>{item.region}</td>
+              <td className="mono">{item.transactionId}</td><td className="mono">{item.sourceAccount}</td><td>{item.region === 'MX' ? 'Varias regiones' : item.region}</td>
               <td className="amount">{amount(item.amount)}</td>
               <td>{item.documents?.map((document) => <small key={document.docEntry}>{document.docNum} · {document.cardName}</small>)}</td>
               <td><button className="button secondary" disabled={querying} onClick={() => query(item)}>{querying && selectedId === item.submissionId ? <LoaderCircle size={16} className="spin" /> : <Search size={16} />} Consultar detalle</button></td>

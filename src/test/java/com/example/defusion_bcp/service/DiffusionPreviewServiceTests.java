@@ -67,7 +67,7 @@ class DiffusionPreviewServiceTests {
 
     @Test
     @SuppressWarnings("unchecked")
-    void removesThePrefixFromProviderGlossAndAchDetailInTheGeneratedPayload() {
+    void removesThePrefixFromProviderAndAchGlossInTheGeneratedPayload() {
         when(client.vendorPayment(null, 1)).thenReturn(paymentWithRemarks(1, "1005", "BCPMN/DEBITO Pago proveedor"));
         when(client.vendorPayment(null, 2)).thenReturn(paymentWithRemarks(2, "1014", "BCPMN/DEBITO Pago ACH"));
         var result = service.preview(null, new DiffusionDtos.PreviewRequest(List.of(
@@ -76,17 +76,26 @@ class DiffusionPreviewServiceTests {
         var providers = (List<Map<String, Object>>) spreadsheet.get("formProvidersPayments");
         var ach = (List<Map<String, Object>>) spreadsheet.get("formAchPayments");
         assertThat(providers.getFirst()).containsEntry("glossPayment", "Pago proveedor");
-        assertThat(ach.getFirst()).containsEntry("firstDetail", "Pago ACH");
+        assertThat(ach.getFirst()).containsEntry("glossPayment", "Pago ACH")
+            .containsEntry("firstDetail", "Pago ACH");
         assertThat(result.payload().toString()).doesNotContainIgnoringCase("BCPMN/DEBITO");
     }
 
     @Test
-    void rejectsDifferentCitiesInTheSameBatch() {
-        when(client.vendorPayment(null, 1)).thenReturn(payment(1, "1005", "LA PAZ", "10", "BS", "tNO"));
+    @SuppressWarnings("unchecked")
+    void acceptsDifferentCitiesWithOneSourceAccountAndKeepsEachAchBranchOffice() {
+        when(client.vendorPayment(null, 1)).thenReturn(payment(1, "1014", "LA PAZ", "10", "BS", "tNO"));
         when(client.vendorPayment(null, 2)).thenReturn(payment(2, "1014", "SANTA CRUZ", "20", "BS", "tNO"));
-        assertThatThrownBy(() -> service.preview(null, new DiffusionDtos.PreviewRequest(List.of(
-            selection(1, "1005", "LP"), selection(2, "1014", "SC")))))
-            .isInstanceOf(SapServiceException.class).hasMessageContaining("misma region");
+        var result = service.preview(null, new DiffusionDtos.PreviewRequest(List.of(
+            selection(1, "1014", "LP"), selection(2, "1014", "SC"))));
+        var spreadsheet = (Map<String, Object>) result.payload().get("spreadsheet");
+        var ach = (List<Map<String, Object>>) spreadsheet.get("formAchPayments");
+        assertThat(result.region().code()).isEqualTo("MX");
+        assertThat(result.payload().get("sourceAccount")).isEqualTo("2015009988370");
+        assertThat(result.payload().get("amount")).isEqualTo(new BigDecimal("30.00"));
+        assertThat(ach).extracting(line -> line.get("branchOfficeId")).containsExactly(201, 701);
+        assertThat(ach).extracting(line -> line.get("documentExtension")).containsExactly("LP", "SC");
+        assertThat(result.payload().toString()).doesNotContain("MX");
     }
 
     @Test
@@ -195,11 +204,31 @@ class DiffusionPreviewServiceTests {
     }
 
     @ParameterizedTest
-    @CsvSource({"11010501,2015009988370", "11010570,20150838488388"})
-    void setsTheBankHeaderSourceAccountFromTheActualSapTransferAccount(String source, String bankAccount) {
+    @CsvSource({"11010501,2015009988370,Difusion Cuenta de LP", "11010570,20150838488388,Difusion Cuenta de SC"})
+    void setsTheBankHeaderFromTheActualSapTransferAccount(String source, String bankAccount, String fundSource) {
         when(client.vendorPayment(null, 1)).thenReturn(payment(1, "1014", "LA PAZ", "10", "BS", "tNO", null, "4", "NIT", source));
         var result = service.preview(null, new DiffusionDtos.PreviewRequest(List.of(selection(1, "1014", "LP")), source));
         assertThat(result.payload().get("sourceAccount")).isEqualTo(bankAccount);
+        assertThat(result.payload().get("fundSource")).isEqualTo(fundSource);
+        assertThat(result.payload().get("fundDestination")).isEqualTo("Destinos para PBL1");
+    }
+
+    @Test
+    void listsDistinctSapCardCodesInFundDestinationWithoutManualFundConfiguration() {
+        when(client.vendorPayment(null, 1)).thenReturn(payment(1, "1005", "LA PAZ", "10", "BS", "tNO",
+            null, "4", "NIT", "11010501", "PBL1"));
+        when(client.vendorPayment(null, 2)).thenReturn(payment(2, "1014", "SANTA CRUZ", "20", "BS", "tNO",
+            null, "1", "NIT", "11010501", "PBL2"));
+        when(client.vendorPayment(null, 3)).thenReturn(payment(3, "1014", "LA PAZ", "30", "BS", "tNO",
+            null, "4", "NIT", "11010501", "PBL1"));
+        var result = service.preview(null, new DiffusionDtos.PreviewRequest(List.of(
+            selection(1, "1005", "LP"), selection(2, "1014", "SC"), selection(3, "1014", "LP"))));
+        assertThat(result.payload()).containsEntry("fundSource", "Difusion Cuenta de LP")
+            .containsEntry("fundDestination", "Destinos para PBL1, PBL2");
+        result.payload().put("password", "secret");
+        result.payload().put("documentNumber", "1234567");
+        result.payload().put("cismartApprovers", List.of(Map.of("idc", "1234567-Q-LP", "type", 1)));
+        assertThatCode(() -> service.validateForSending(result)).doesNotThrowAnyException();
     }
 
     @Test
@@ -247,15 +276,22 @@ class DiffusionPreviewServiceTests {
     private SapVendorPaymentDtos.PaymentDetail payment(long id, String bank, String city, String amount,
                                                        String currency, String cancelled, String bankName, String sapCity, String sapType,
                                                        String sourceAccount) {
+        return payment(id, bank, city, amount, currency, cancelled, bankName, sapCity, sapType,
+            sourceAccount, "PBL1");
+    }
+
+    private SapVendorPaymentDtos.PaymentDetail payment(long id, String bank, String city, String amount,
+                                                       String currency, String cancelled, String bankName, String sapCity, String sapType,
+                                                       String sourceAccount, String cardCode) {
         var account = new SapVendorPaymentDtos.BankAccount(0, bank, "00123456", "Titular SAP", "LP", city, bankName, null);
         var region = PaymentRegionMatcher.regionForSapCity(sapCity, service.catalogs());
-        var partner = new SapVendorPaymentDtos.BusinessPartnerMatch(true, "PBL1", "Proveedor SAP",
-            "/BusinessPartners('PBL1')", "proveedor@example.com", "176950021", 0, List.of(account),
+        var partner = new SapVendorPaymentDtos.BusinessPartnerMatch(true, cardCode, "Proveedor SAP",
+            "/BusinessPartners('" + cardCode + "')", "proveedor@example.com", "176950021", 0, List.of(account),
             sapCity, region, sapType, SapDocumentMapper.documentType(sapType, service.catalogs()), region == null ? "" : region.code());
         var invoice = new SapVendorPaymentDtos.PaymentInvoice(0, 100, new BigDecimal(amount),
             "it_PurchaseInvoice", 1, "2026-07-01", "2022", "176950021", "Proveedor SAP", "00123456", new BigDecimal(amount));
         return new SapVendorPaymentDtos.PaymentDetail(id, id + 1000, "rSupplier", "2026-07-01", null, null,
-            "PBL1", "Proveedor SAP", "BOB", currency, new BigDecimal(amount), null, "00123456", null,
+            cardCode, "Proveedor SAP", "BOB", currency, new BigDecimal(amount), null, "00123456", null,
             "REF-1", null, "Pago de facturas", cancelled, "pasWithout", 3, "CAL", List.of(invoice), partner, sourceAccount);
     }
 

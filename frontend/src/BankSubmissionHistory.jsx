@@ -54,7 +54,7 @@ export default function BankSubmissionHistory({ history, error, busy, sourceAcco
         <tbody>{history.map((batch) => <tr key={batch.id}>
           <td>{dateTime(batch.createdAt)}<small>{batch.requestedBy}</small><small className="mono">{batch.requestId}</small></td>
           <td>{batch.documents.map((document) => <small key={document.docEntry}>{document.docNum} · {document.cardCode} · {document.cardName}</small>)}</td>
-          <td>{sourceAccounts.find((account) => account.sapAccount === batch.sourceAccount)?.name || batch.sourceAccount}<small>{batch.region}</small></td>
+          <td>{sourceAccounts.find((account) => account.sapAccount === batch.sourceAccount)?.name || batch.sourceAccount}<small>{batch.region === 'MX' ? 'Varias regiones' : batch.region}</small></td>
           <td className="amount">{money(batch.amount)}</td><td><StatusBadge status={batch.status} />{batch.releasedAt && <small>Revertido localmente<br />{dateTime(batch.releasedAt)} · {batch.releasedBy}</small>}</td>
           <td className="mono">{batch.bankTransactionId || 'Pendiente'}</td>
           <td className="bank-result"><strong>HTTP: {batch.httpStatus ?? 'Sin respuesta'}</strong><button className="button secondary" onClick={(event) => { opener.current = event.currentTarget; setViewing(batch) }}><Eye size={16} /> Ver respuesta bancaria</button></td>
