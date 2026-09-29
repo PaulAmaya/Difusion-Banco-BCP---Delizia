@@ -1,6 +1,6 @@
-# Portal Delizia 1.0: preparacion de produccion
+# Portal Delizia 2.0: preparacion de produccion
 
-La configuracion productiva es independiente de las pruebas. No se ha iniciado ni se han enviado pagos productivos.
+La configuracion productiva es independiente de las pruebas.
 
 ## Archivos y credenciales
 
