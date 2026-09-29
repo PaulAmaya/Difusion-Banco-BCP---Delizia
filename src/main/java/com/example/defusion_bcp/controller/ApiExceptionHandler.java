@@ -5,6 +5,7 @@ import com.example.defusion_bcp.service.SapServiceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -22,6 +23,13 @@ public class ApiExceptionHandler {
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public ErrorResponse badCredentials() {
         return new ErrorResponse("AUTH_INVALID", "Usuario o contraseña SAP incorrectos", LocalDateTime.now(), Map.of());
+    }
+
+    @ExceptionHandler(DisabledException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ErrorResponse userNotAllowed() {
+        return new ErrorResponse("AUTH_FORBIDDEN", "Su usuario SAP no está habilitado para este portal",
+            LocalDateTime.now(), Map.of());
     }
 
     @ExceptionHandler(AuthenticationServiceException.class)

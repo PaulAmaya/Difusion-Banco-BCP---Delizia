@@ -56,6 +56,7 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -192,6 +193,21 @@ public class SapClient {
         } catch (RestClientException | IllegalArgumentException exception) {
             log.warn("No se pudo cerrar la sesión remota de SAP; expirará automáticamente");
         }
+    }
+
+    public Optional<SapUserAccess> userAccess(SapSession session, String username) {
+        String filter = "UserCode eq '" + username.replace("'", "''") + "'";
+        URI uri = UriComponentsBuilder.fromUri(operationUri("Users"))
+            .queryParam("$select", "UserCode,U_TIPO,U_AREA")
+            .queryParam("$filter", filter)
+            .queryParam("$top", 2)
+            .build()
+            .encode()
+            .toUri();
+        SapUserPage response = getSap(uri, session, SapUserPage.class, "No existe el usuario en SAP");
+        List<SapUserAccess> users = response.value() == null ? List.of() : response.value();
+        return users.size() == 1 && username.equalsIgnoreCase(users.getFirst().userCode())
+            ? Optional.of(users.getFirst()) : Optional.empty();
     }
 
     public SapVendorPaymentDtos.PaymentListResponse vendorPayments(
@@ -815,6 +831,16 @@ public class SapClient {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record SapBank(@JsonProperty("BankCode") String bankCode, @JsonProperty("BankName") String bankName) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record SapUserAccess(
+        @JsonProperty("UserCode") String userCode,
+        @JsonProperty("U_TIPO") String userType,
+        @JsonProperty("U_AREA") String area
+    ) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record SapUserPage(@JsonProperty("value") List<SapUserAccess> value) {}
 
     private static final class VerifiedTlsRequestFactory extends SimpleClientHttpRequestFactory {
         private final String expectedHostname;

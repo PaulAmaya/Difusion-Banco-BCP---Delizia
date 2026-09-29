@@ -10,10 +10,12 @@ import org.springframework.security.authentication.BadCredentialsException;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -73,6 +75,38 @@ class SapClientTests {
 
         assertThatThrownBy(() -> new SapClient(properties).login("wrong", "wrong"))
             .isInstanceOf(BadCredentialsException.class);
+    }
+
+    @Test
+    void userAccessQueriesUsersWithSapSessionAndReturnsCustomFields() {
+        AtomicReference<String> query = new AtomicReference<>();
+        AtomicReference<String> cookie = new AtomicReference<>();
+        server.createContext("/b1s/v1/Users", exchange -> {
+            query.set(URLDecoder.decode(exchange.getRequestURI().getRawQuery(), StandardCharsets.UTF_8));
+            cookie.set(exchange.getRequestHeaders().getFirst("Cookie"));
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            send(exchange, 200, "{\"value\":[{\"UserCode\":\"SIS50\",\"U_TIPO\":\"P\",\"U_AREA\":\"TES_SC\",\"UserName\":\"Tesoreria\"}]}");
+        });
+        SapSession session = new SapSession("session-123", "B1SESSION=session-123; ROUTEID=.node1",
+            Instant.now().plusSeconds(1500), "TEST_DB", "10.0");
+
+        var access = new SapClient(properties).userAccess(session, "SIS50");
+
+        assertThat(query.get()).contains("$filter=UserCode eq 'SIS50'", "$select=UserCode,U_TIPO,U_AREA", "$top=2");
+        assertThat(cookie.get()).isEqualTo("B1SESSION=session-123; ROUTEID=.node1");
+        assertThat(access).contains(new SapClient.SapUserAccess("SIS50", "P", "TES_SC"));
+    }
+
+    @Test
+    void userAccessRejectsMissingOrMismatchedSapUser() {
+        server.createContext("/b1s/v1/Users", exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            send(exchange, 200, "{\"value\":[{\"UserCode\":\"OTHER\",\"U_TIPO\":\"P\",\"U_AREA\":\"TES_LP\"}]}");
+        });
+        SapSession session = new SapSession("session-123", "B1SESSION=session-123",
+            Instant.now().plusSeconds(1500), "TEST_DB", "10.0");
+
+        assertThat(new SapClient(properties).userAccess(session, "SIS50")).isEmpty();
     }
 
     @Test
